@@ -151,7 +151,7 @@ async function uploadOrder(order) {
   return new Promise(async (resolve, reject) => {
     let body = JSON.stringify(order);
 
-    let request = https.request(`https://${SHOPIFY_STORE_HANDLE}.myshopify.com/admin/api/2019-07/orders.json`, {
+    let request = https.request(`https://${SHOPIFY_STORE_HANDLE}.myshopify.com/admin/api/2021-07/orders.json`, {
       method: 'POST',
       headers: {
         'Authorization': `Basic ${new Buffer.from(SHOPIFY_STORE_CREDENTIALS).toString('base64')}`,
