@@ -11,9 +11,8 @@ const SHOPIFY_API_KEY = ENV.SHOPIFY_API_KEY;
 const SHOPIFY_API_PASSWORD = ENV.SHOPIFY_API_PASSWORD;
 const SHOPIFY_STORE_CREDENTIALS = `${SHOPIFY_API_KEY}:${SHOPIFY_API_PASSWORD}`;
 
-// Add custom note or tag to each imported order
-const order_note = 'Kickstarter/Indiegogo order ID: ';
-const order_tag = 'IMPORTED';
+// Add tag to each imported order
+const order_tag = 'IMPORT';
 
 (async () => {
   let records = await csv().fromFile(CSV_FILE_PATH);
