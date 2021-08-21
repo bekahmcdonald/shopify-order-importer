@@ -26,41 +26,64 @@ const order_tag = 'IMPORT';
   let orders = {};
 
   records.forEach(record => {
-    record.order_name = record.email.replace(/[^\w]+/g, '_');
 
     if (!orders['_' + record.order_name]) {
       orders['_' + record.order_name] = {
         imported: false,
         order_name: record.order_name,
-        email: record.email,
-        phone: record.phone,
-        billing_name: record.billing_name,
+        email: record.billing_email,
+        phone: record.billing_phone,
+        billing_first_name: record.billing_first_name,
+        billing_last_name: record.billing_last_name,
         billing_company: record.company,
-        billing_address1: record.billing_address1,
-        billing_address2: record.billing_address2 || null,
+        billing_address_1: record.billing_address_1,
         billing_city: record.billing_city,
-        billing_zip: record.billing_zip,
-        billing_province: record.billing_province && record.billing_province.length === 2 ?
-          record.billing_province : null,
-        billing_country: record.billing_country,
+        billing_postocde: record.billing_postcode,
+        billing_state: record.billing_state,
+        billing_country: record.billing_country_code,
+        shipping_address_1: record.shipping_address_1,
+        shipping_address_2: '',
+        shipping_city: record.shipping_city,
+        shipping_company: '',
+        shipping_country_code: record.shipping_country_code,
+        shipping_first_name: record.shipping_first_name,
+        shipping_last_name: record.shipping_last_name,
+        shipping_province: record.shipping_state,
+        shipping_zip: record.shipping_postcode,
+        processed_at: record.processed_at,
+        fulfillment_status: record.fulfillment_status,
+        financial_status: record.financial_status,
+        cancel_reason: record.fulfillment_status == 'cancelled',
+        total_discounts: record.cart_discount_amount,
+        total_price: record.order_total_amount,
+        total_tax: record.order_total_tax_amount,
         line_items: [
           {
-            title: record.lineitem_title,
-            sku: record.lineitem_sku,
-            price: 0.00,
-            quantity: parseInt(record.lineitem_quantity)
+            title: record.line_item_name,
+            sku: record.sku,
+            price: parseFloat(record.item_cost),
+            quantity: parseInt(record.quantity)
           }
         ],
-        shipping_method: record.shipping_method,
+        shipping_amount: record.order_shipping_amount,
+        shipping_method: record.shipping_method_title,
         tags: order_tag,
-        note_attributes: record.note_attributes
+        subtotal_price: record.order_subtotal_amount,
+        note_attributes: record.note_attributes,
+        discount_codes: [
+          {
+            'code': record.discount_codes,
+            'amount': record.discount_amount,
+            'type': 'fixed_amount',
+          },
+        ],
       }
     } else {
       orders['_' + record.order_name].line_items.push({
-        title: record.lineitem_title,
-        sku: record.lineitem_sku,
-        price: 0.00,
-        quantity: parseInt(record.lineitem_quantity)
+        title: record.line_item_name,
+        sku: record.sku,
+        price: parseFloat(record.item_cost),
+        quantity: parseInt(record.quantity)
       })
     }
   });
@@ -83,49 +106,69 @@ const order_tag = 'IMPORT';
       console.log(`Uploading order ${i+1}/${ordersArr.length} to Shopify`);
 
       let customer  = {
-        name: order.billing_name,
+        first_name: order.billing_first_name,
+        last_name: order.billing_last_name,
+        company: order.billing_company,
         email: order.email,
-        phone: order.phone
+        phone: order.phone,
       };
 
-      let address = {
-        name: customer.name,
-        address1: order.billing_address1,
-        address2: order.billing_address2,
-        phone: order.phone,
+      let billing_address = {
+        first_name: customer.first_name,
+        last_name: customer.last_name,
+        address1: order.billing_address_1,
+        address2: '',
         city: order.billing_city,
-        zip: order.billing_zip,
-        province_code: order.billing_province,
-        country_code: order.billing_country
+        company: order.billing_company,
+        phone: order.billing_phone,
+        zip: order.billing_postcode,
+        province: order.billing_state,
+        country_code: order.billing_country_code
+      };
+
+      let shipping_address = {
+        address1: order.shipping_address_1,
+        address2: '',
+        city: order.shipping_city,
+        company: '',
+        country_code: order.shipping_country_code,
+        first_name: order.shipping_first_name,
+        last_name: order.shipping_last_name,
+        province: order.shipping_state,
+        zip: order.shipping_postcode
       };
 
       let shipping = {
         title: order.shipping_method,
         code: order.shipping_method,
-        price: 0.00
+        price: order.shipping_amount,
       };
 
       let shopifyOrder = {
         order: {
           customer,
-          billing_address: address,
-          shipping_address: address,
-          financial_status: 'paid',
-          fulfillment_status: null,
-          processing_method: 'manual',
+          billing_address,
+          shipping_address,
+          financial_status: order.financial_status,
+          fulfillment_status: order.fulfillment_status,
+          processed_at: order.processed_at,
           send_fulfillment_receipt: false,
           send_receipt: false,
+          subtotal_price: order.subtotal_price,
           line_items: order.line_items.map(item => {
             return {
               title: item.title,
               sku: item.sku,
-              price: 0.00,
+              price: item.price,
               quantity: item.quantity
             }
           }),
           shipping_lines: [shipping],
           tags: order.tags,
-          note: order.note_attributes ? order_note + order.note_attributes : ''
+          note: order.note,
+          total_discounts: order.total_discounts,
+          total_price: order.total_price,
+          total_tax: order.total_tax,
         }
       };
 
@@ -149,7 +192,6 @@ function sleep(delay) {
 async function uploadOrder(order) {
   return new Promise(async (resolve, reject) => {
     let body = JSON.stringify(order);
-
     let request = https.request(`https://${SHOPIFY_STORE_HANDLE}.myshopify.com/admin/api/2021-07/orders.json`, {
       method: 'POST',
       headers: {
@@ -160,7 +202,9 @@ async function uploadOrder(order) {
     }, response => {
       let data = '';
       response.on('data', chunk => data += chunk);
-      response.on('error', error => reject(error));
+      response.on('error', (error) => {
+        reject(error);
+      });
       response.on('end', () => resolve(data))
     });
 
